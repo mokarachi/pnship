@@ -5,41 +5,40 @@
 <head>
 <meta charset="UTF-8">
 <title>Marine & Weather Forecast - Multiple Points</title>
+
 <style>
-  body { font-family: Arial, sans-serif; padding: 20px; }
-  table { border-collapse: collapse; margin-top: 20px; font-size: 14px; width: 100%; }
-  th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
-  th { background: #f4f4f4; }
-  .multi-column { display: inline-block; margin-right: 10px; vertical-align: top; }
+body { font-family: Arial, sans-serif; padding: 20px; }
+
+table {
+  border-collapse: collapse;
+  margin-top: 20px;
+  font-size: 14px;
+  width: 100%;
+}
+
+th, td {
+  border: 1px solid #ccc;
+  padding: 6px;
+  text-align: center;
+}
+
+th { background: #f4f4f4; }
+
+.multi-column {
+  display: inline-block;
+  margin-right: 10px;
+  vertical-align: top;
+}
+
+canvas {
+  display:block;
+  margin:5px auto;
+}
 </style>
-  <script>
-    function openLink(url) {
-      window.open(url, "_blank"); // Opens link in a new tab
-    }
-  </script>
-
-
-  <button onclick="openLink('https://pmdnmcc.net/websites/DownloadNMCCData.aspx')">DownLoad NMCC DATA</button>
-  <button onclick="openLink('https://mokarachi.github.io/surface/')">Extract Surface Data</button>
-  <button onclick="openLink('https://mokarachi.github.io/temps/')">Extract Temps Data</button>
-  <button onclick="openLink('https://mokarachi.github.io/ptv/')">PTV Report</button>
-  <button onclick="openLink('https://mokarachi.github.io/fc/')">Forecast</button>
-  <button onclick="openLink('https://mokarachi.github.io/spd/')">SPD</button>
-  <button onclick="openLink('https://mokarachi.github.io/df/')">District Forecast</button>
-  <button onclick="openLink('https://mokarachi.github.io/coastalbelt/')">Coastal Belt</button>
-  <button onclick="openLink('https://mokarachi.github.io/sigmet/')">SIGMET</button>
-
-
-
-
-
-
-
-
-
-
 </head>
+
 <body>
+
 <h2>Marine & Weather Forecast - Multiple Points</h2>
 
 <div id="derivedSummary">Loading derived tables...</div>
@@ -47,6 +46,8 @@
 <div id="hourly">Loading hourly tables...</div>
 
 <script>
+
+// ================= POINTS =================
 const points = {
   "A": [24.5, 66.5],
   "B": [23.5, 65.5],
@@ -65,281 +66,318 @@ const periods = [
   { label: "Following 24h", startHour: 0, duration: 24, offsetDays: 2 }
 ];
 
-const derivedTableKeys = ["Wind direction","Wind speed & gust","Weather","Visibility","Sea state","Swell height","Period","Swell direction","Avg Pressure","Temperature","Humidity"];
+const derivedTableKeys = [
+  "Wind direction","Wind speed & gust","Weather","Visibility",
+  "Sea state","Swell height","Period","Swell direction",
+  "Avg Pressure","Temperature","Humidity"
+];
 
+// ================= FETCH =================
 async function fetchData(lat, lon){
-  const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,relative_humidity_2m,surface_pressure,weathercode&forecast_days=3&timezone=UTC&models=best_match`;
-  const waveUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=swell_wave_height,swell_wave_direction,swell_wave_period&forecast_days=3&timezone=UTC&models=best_match`;
-  const [weatherRes, waveRes] = await Promise.all([fetch(weatherUrl), fetch(waveUrl)]);
-  return { weatherData: await weatherRes.json(), waveData: await waveRes.json() };
+  const w = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,relative_humidity_2m,surface_pressure,weathercode&forecast_days=3&timezone=UTC`;
+
+  const m = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=swell_wave_height,swell_wave_direction,swell_wave_period&forecast_days=3&timezone=UTC`;
+
+  const [r1,r2] = await Promise.all([fetch(w), fetch(m)]);
+  return { weatherData: await r1.json(), waveData: await r2.json() };
 }
 
-// --- Utility Functions ---
-function avg(arr){ return (arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(2); }
-function min(arr){ return Math.min(...arr).toFixed(2); }
-function max(arr){ return Math.max(...arr).toFixed(2); }
+// ================= HELPERS =================
+function avg(a){ return (a.reduce((x,y)=>x+y,0)/a.length).toFixed(2); }
+function min(a){ return Math.min(...a).toFixed(2); }
+function max(a){ return Math.max(...a).toFixed(2); }
 
-function circularMean(degrees){
-  if(!degrees || degrees.length===0) return 0;
-  const rad = degrees.map(d=>d*Math.PI/180);
-  const sinSum = rad.reduce((a,b)=>a+Math.sin(b),0);
-  const cosSum = rad.reduce((a,b)=>a+Math.cos(b),0);
-  let mean = Math.atan2(sinSum/rad.length, cosSum/rad.length);
-  let deg = mean*180/Math.PI;
-  if(deg<0) deg+=360;
-  return deg;
+function range(a){
+  return `${min(a)} - ${max(a)}`;
 }
 
-function degTo16Point(deg){
-  const compass=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
-  // handle NaN or null
-  if(deg === null || isNaN(deg)) return "N/A";
-  return compass[Math.floor(((deg + 11.25) % 360)/22.5)];
+function circularMean(d){
+  const r=d.map(x=>x*Math.PI/180);
+  const s=r.reduce((a,b)=>a+Math.sin(b),0);
+  const c=r.reduce((a,b)=>a+Math.cos(b),0);
+  let m=Math.atan2(s/d.length,c/d.length)*180/Math.PI;
+  return m<0?m+360:m;
 }
 
-function mostFrequent(arr){
-  const freq = {};
-  arr.forEach(a=>{freq[a]=(freq[a]||0)+1;});
-  return Object.keys(freq).reduce((a,b)=>freq[a]>=freq[b]?a:b);
-}
-function visibilityFromWeather(weather){
-  if(weather.includes("Clear") || weather.includes("Mainly clear")) return "3–5 NM";
-  if(weather.includes("cloudy") || weather.includes("Partly cloudy")) return "3–4 NM";
-  if(weather.includes("Haze")) return "2–3 NM";
-  if(weather.includes("Fog")) return "0.2–0.5 NM";
-  if(weather.includes("Rain") || weather.includes("Drizzle") || weather.includes("Thunderstorm")) return "1–2 NM";
-  if(weather.includes("Snow")) return "0.5–1.5 NM";
-  return "N/A";
-}
-function seaState(h){
-  if(h<0.1) return "Calm";
-  if(h<0.5) return "Smooth";
-  if(h<1.25) return "Slight";
-  if(h<2.5) return "Moderate";
-  if(h<4) return "Rough";
-  if(h<6) return "Very rough";
-  if(h<9) return "High";
-  return "Phenomenal";
-}
-function toKnots(v){ return (v/1.852).toFixed(1); } // km/h to knots
-
-function getIndices(time,startHour,duration,offsetDays=0){
-  let startIndex = time.findIndex(t=>parseInt(t.split("T")[1].split(":")[0])===startHour);
-  if(startIndex===-1) startIndex=0;
-  startIndex += (offsetDays||0)*24;
-  const indices=[];
-  for(let i=startIndex;i<startIndex+duration && i<time.length;i++) indices.push(i);
-  return indices;
+function deg16(d){
+  const c=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+  return c[Math.floor(((d+11.25)%360)/22.5)];
 }
 
-// --- New helper: find two most extreme circular directions ---
-function extremeDirections(angles){
-  if(!angles || angles.length===0) return [null, null];
-  const sorted = [...angles].sort((a,b)=>a-b);
-  let maxGap = -1, startIdx = 0;
-  for(let i=0; i<sorted.length; i++){
-    const next = (i+1)%sorted.length;
-    const gap = (sorted[next] - sorted[i] + 360) % 360;
-    if(gap > maxGap){
-      maxGap = gap;
-      startIdx = next;
-    }
+function extreme(a){
+  const s=[...a].sort((x,y)=>x-y);
+  let g=-1,i=0;
+  for(let j=0;j<s.length;j++){
+    const n=(j+1)%s.length;
+    const gap=(s[n]-s[j]+360)%360;
+    if(gap>g){g=gap;i=n;}
   }
-  const extreme1 = sorted[startIdx];
-  const extreme2 = sorted[(startIdx-1+sorted.length)%sorted.length];
-  return [extreme1, extreme2];
+  return [s[i],s[(i-1+s.length)%s.length]];
 }
 
-function pad3(n){
-  if(n === null || isNaN(n)) return "000";
-  const v = Math.round(((n%360)+360)%360); // normalize 0-359
-  return String(v).padStart(3,"0");
+function pad3(d){
+  d=((d%360)+360)%360;
+  return String(Math.round(d)).padStart(3,"0");
 }
 
-// --- formatting helpers ---
-function formatDerivedDir(angles){
-  if(!angles || angles.length===0) return "N/A";
-  const avg = circularMean(angles);
-  const [ext1, ext2] = extremeDirections(angles);
-  const compassAvg = degTo16Point(avg);
-  const compassExt1 = degTo16Point(Math.round(ext1));
-  const compassExt2 = degTo16Point(Math.round(ext2));
-  const numericAvg = pad3(avg);
-  const numericExt1 = pad3(ext1);
-  const numericExt2 = pad3(ext2);
-  return `${compassAvg}(${compassExt1}-${compassExt2})=${numericAvg}(${numericExt1}-${numericExt2})`;
+function knots(v){ return (v/1.852).toFixed(1); }
+
+function getIdx(t,h,d,o=0){
+  let s=t.findIndex(x=>parseInt(x.split("T")[1])===h);
+  if(s<0)s=0;
+  s+=o*24;
+  return [...Array(d)].map((_,i)=>s+i);
 }
 
-function formatSummaryDir(angles){
-  if(!angles || angles.length===0) return "N/A";
-  const avg = circularMean(angles);
-  const [ext1, ext2] = extremeDirections(angles);
-  const numericAvg = pad3(avg);
-  const numericExt1 = pad3(ext1);
-  const numericExt2 = pad3(ext2);
-  const compassAvg = degTo16Point(avg);
-  const compassExt1 = degTo16Point(Math.round(ext1));
-  const compassExt2 = degTo16Point(Math.round(ext2));
-  return `[${numericAvg}(${numericExt1}-${numericExt2})==${compassAvg}(${compassExt1}-${compassExt2})]`;
-}
+// ================= WIND COMPASS =================
+function drawWindCompass(canvasId, avgDeg, minDeg, maxDeg, hours){
+  const canvas=document.getElementById(canvasId);
+  if(!canvas) return;
 
-// --- Build Derived Table ---
-function buildDerivedTable(name, weatherData, waveData){
-  const wu = weatherData.hourly_units || {};
-  const time = weatherData.hourly.time;
-  const temp = weatherData.hourly.temperature_2m;
-  const ws = weatherData.hourly.wind_speed_10m;
-  const wg = weatherData.hourly.wind_gusts_10m;
-  const wd = weatherData.hourly.wind_direction_10m;
-  const rh = weatherData.hourly.relative_humidity_2m;
-  const pr = weatherData.hourly.surface_pressure;
-  const wc = weatherData.hourly.weathercode;
-  const wh = waveData.hourly.swell_wave_height;
-  const wp = waveData.hourly.swell_wave_period;
-  const wdir = waveData.hourly.swell_wave_direction;
-  const weatherMap = {0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Cloudy",45:"Fog",48:"Rime fog",51:"Light drizzle",53:"Drizzle",55:"Dense drizzle",61:"Slight rain",63:"Rain",65:"Heavy rain",71:"Snow fall",80:"Rain showers",95:"Thunderstorm"};
+  const ctx=canvas.getContext("2d");
+  const center=40;
+  const radius=30;
 
-  let html=`<div class="multi-column"><h3>Derived Table - Point ${name}</h3><table><tr><th>Parameter</th>`;
-  periods.forEach(p=>html+=`<th>${p.label}</th>`); html+=`</tr>`;
+  ctx.clearRect(0,0,80,80);
 
-  derivedTableKeys.forEach(key=>{
-    html+=`<tr><td>${key}</td>`;
-    periods.forEach(p=>{
-      const idx = getIndices(time,p.startHour,p.duration,p.offsetDays||0);
-      if(idx.length===0){html+=`<td>N/A</td>`; return;}
-      if(key==="Wind direction"){
-        const angles = idx.map(i=>wd[i]);
-        html+=`<td>${formatDerivedDir(angles)}</td>`;
-      }
-      else if(key==="Wind speed & gust"){
-        const wsArr = idx.map(i=>Math.ceil(toKnots(ws[i])));
-        const wgArr = idx.map(i=>Math.ceil(toKnots(wg[i])));
-        html+=`<td>${Math.min(...wsArr)}-${Math.max(...wsArr)} KT / Gust ${Math.max(...wgArr)} KT</td>`;
-      }
-      else if(key==="Weather"){const most=mostFrequent(idx.map(i=>wc[i])); html+=`<td>${weatherMap[most]}</td>`;}
-      else if(key==="Visibility"){const most=mostFrequent(idx.map(i=>wc[i])); html+=`<td>${visibilityFromWeather(weatherMap[most])}</td>`;}
-      else if(key==="Sea state"){const most=mostFrequent(idx.map(i=>seaState(wh[i]))); html+=`<td>${most}</td>`;}
-      else if(key==="Swell height"){const arr=idx.map(i=>wh[i]); html+=`<td>${avg(arr)} (${Math.floor(Math.min(...arr)*10)/10},${Math.ceil(Math.max(...arr)*10)/10})</td>`;}
-      else if(key==="Period"){const arr=idx.map(i=>wp[i]); html+=`<td>${avg(arr)} (${Math.floor(Math.min(...arr))},${Math.ceil(Math.max(...arr))})</td>`;}
-      else if(key==="Swell direction"){const angles=idx.map(i=>wdir[i]); html+=`<td>${formatDerivedDir(angles)}</td>`;}
-      else if(key==="Avg Pressure"){const arr=idx.map(i=>pr[i]); html+=`<td>${avg(arr)} (${min(arr)}, ${max(arr)})</td>`;}
-      else if(key==="Temperature"){const arr=idx.map(i=>temp[i]); html+=`<td>${avg(arr)}  (${min(arr)} -- ${max(arr)})</td>`;}
-      else if(key==="Humidity"){const arr=idx.map(i=>rh[i]); html+=`<td>${Math.round(avg(arr))} -(${Math.round(Math.min(...arr))}--${Math.round(Math.max(...arr))})</td>`;}
+  ctx.beginPath();
+  ctx.arc(center,center,radius,0,2*Math.PI);
+  ctx.stroke();
+
+  if(hours?.length){
+    const maxSpeed=Math.max(...hours.map(h=>h.speed||1));
+
+    hours.forEach(h=>{
+      const intensity=(h.speed||1)/maxSpeed;
+      const shade=Math.floor(50+205*intensity);
+
+      const a=(h.dir-90)*Math.PI/180;
+      const x=center+Math.cos(a)*(radius-10);
+      const y=center+Math.sin(a)*(radius-10);
+
+      ctx.strokeStyle=`rgb(${shade},${shade},${shade})`;
+      ctx.beginPath();
+      ctx.moveTo(center,center);
+      ctx.lineTo(x,y);
+      ctx.stroke();
     });
+  }
+
+  const s=(minDeg-90)*Math.PI/180;
+  const e=(maxDeg-90)*Math.PI/180;
+
+  ctx.beginPath();
+  ctx.moveTo(center,center);
+  ctx.arc(center,center,radius-5,s,e);
+  ctx.fillStyle="rgba(173,216,230,0.3)";
+  ctx.fill();
+
+  function arrow(d,color){
+    const a=(d-90)*Math.PI/180;
+    ctx.beginPath();
+    ctx.moveTo(center,center);
+    ctx.lineTo(
+      center+Math.cos(a)*(radius-5),
+      center+Math.sin(a)*(radius-5)
+    );
+    ctx.strokeStyle=color;
+    ctx.lineWidth=2;
+    ctx.stroke();
+  }
+
+  arrow(avgDeg,"blue");
+  arrow(minDeg,"black");
+  arrow(maxDeg,"black");
+}
+
+// ================= DERIVED + SUMMARY TABLE =================
+function buildTable(name,w,wv,type){
+
+  const t=w.hourly.time;
+  const temp=w.hourly.temperature_2m;
+  const ws=w.hourly.wind_speed_10m;
+  const wg=w.hourly.wind_gusts_10m;
+  const wd=w.hourly.wind_direction_10m;
+  const rh=w.hourly.relative_humidity_2m;
+  const pr=w.hourly.surface_pressure;
+  const wc=w.hourly.weathercode;
+
+  const wh=wv.hourly.swell_wave_height;
+  const wp=wv.hourly.swell_wave_period;
+  const wdir=wv.hourly.swell_wave_direction;
+
+  const weatherMap={
+    0:"Clear",1:"Mainly clear",2:"Partly cloudy",3:"Cloudy",
+    45:"Fog",48:"Fog",51:"Drizzle",53:"Drizzle",55:"Drizzle",
+    61:"Rain",63:"Rain",65:"Heavy rain",80:"Showers",95:"Thunderstorm"
+  };
+
+  let html=`<div class="multi-column"><h3>${type} - ${name}</h3><table><tr><th>Param</th>`;
+
+  periods.forEach(p=>html+=`<th>${p.label}</th>`);
+  html+=`</tr>`;
+
+  derivedTableKeys.forEach(k=>{
+    html+=`<tr><td>${k}</td>`;
+
+    periods.forEach(p=>{
+      const idx=getIdx(t,p.startHour,p.duration,p.offsetDays||0);
+
+      if(k==="Wind direction"){
+        const ang=idx.map(i=>wd[i]);
+        const avg=circularMean(ang);
+        const [mn,mx]=extreme(ang);
+
+        const id=`${type}_${name}_${p.label}`;
+
+        html+=`<td>
+          <canvas id="${id}" width="80" height="80"></canvas><br>
+          ${deg16(avg)} (${pad3(avg)})
+        </td>`;
+
+        setTimeout(()=>{
+          drawWindCompass(
+            id,
+            avg,
+            mn,
+            mx,
+            idx.map(i=>({dir:wd[i],speed:ws[i]}))
+          );
+        },0);
+      }
+
+      else if(k==="Wind speed & gust"){
+       const a=idx.map(i=>Math.round(ws[i]));
+	const g=idx.map(i=>Math.round(wg[i]));
+	html+=`<td>${Math.min(...a)}-${Math.max(...a)} KT / ${Math.max(...g)} KT</td>`;
+      }
+
+      else if(k==="Weather"){
+        html+=`<td>${weatherMap[wc[idx[0]]]}</td>`;
+      }
+
+      else if(k==="Visibility"){
+        html+=`<td>${weatherMap[wc[idx[0]]]}</td>`;
+      }
+
+      else if(k==="Sea state"){
+        html+=`<td>-</td>`;
+      }
+
+      else if(k==="Swell height"){
+        const a=idx.map(i=>wh[i]);
+        html+=`<td>${avg(a)}</td>`;
+      }
+
+      else if(k==="Period"){
+        const a=idx.map(i=>wp[i]);
+        html+=`<td>${avg(a)}</td>`;
+      }
+
+      else if(k==="Swell direction"){
+        const a=idx.map(i=>wdir[i]);
+        html+=`<td>${deg16(circularMean(a))}</td>`;
+      }
+
+      else if(k==="Avg Pressure"){
+        const a=idx.map(i=>pr[i]);
+        html+=`<td>${avg(a)} (${range(a)})</td>`;
+      }
+
+      else if(k==="Temperature"){
+        const a=idx.map(i=>temp[i]);
+        html+=`<td>${avg(a)} (${range(a)})</td>`;
+      }
+
+      else if(k==="Humidity"){
+       const a=idx.map(i=>rh[i]);
+
+	html+=`<td>
+	${Math.round(avg(a))} (${Math.round(Math.min(...a))} - ${Math.round(Math.max(...a))})
+	</td>`;
+      }
+    });
+
     html+=`</tr>`;
   });
+
   html+=`</table></div>`;
   return html;
 }
 
-// --- Build Summary Table ---
-function buildSummaryTable(name, weatherData, waveData){
-  const wu = weatherData.hourly_units || {};
-  const time = weatherData.hourly.time;
-  const temp = weatherData.hourly.temperature_2m;
-  const ws = weatherData.hourly.wind_speed_10m;
-  const wg = weatherData.hourly.wind_gusts_10m;
-  const wd = weatherData.hourly.wind_direction_10m;
-  const rh = weatherData.hourly.relative_humidity_2m;
-  const pr = weatherData.hourly.surface_pressure;
-  const wc = weatherData.hourly.weathercode;
-  const wh = waveData.hourly.swell_wave_height;
-  const wp = waveData.hourly.swell_wave_period;
-  const wdir = waveData.hourly.swell_wave_direction;
-  const weatherMap = {0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Cloudy",45:"Fog",48:"Rime fog",51:"Light drizzle",53:"Drizzle",55:"Dense drizzle",61:"Slight rain",63:"Rain",65:"Heavy rain",71:"Snow fall",80:"Rain showers",95:"Thunderstorm"};
+// ================= HOURLY TABLE (FIXED) =================
+function buildHourlyTable(name,w,wv){
 
-  let html=`<div class="multi-column"><h3>Summary Table - Point ${name}</h3><table><tr><th>Parameter</th>`;
-  periods.forEach(p=>html+=`<th>${p.label}</th>`); html+=`</tr>`;
+  const t=w.hourly.time;
+  const temp=w.hourly.temperature_2m;
+  const ws=w.hourly.wind_speed_10m;
+  const wg=w.hourly.wind_gusts_10m;
+  const wd=w.hourly.wind_direction_10m;
+  const rh=w.hourly.relative_humidity_2m;
+  const pr=w.hourly.surface_pressure;
+  const wc=w.hourly.weathercode;
 
-  derivedTableKeys.forEach(key=>{
-    html+=`<tr><td>${key}</td>`;
-    periods.forEach(p=>{
-      const idx = getIndices(time,p.startHour,p.duration,p.offsetDays||0);
-      if(idx.length===0){html+=`<td>N/A</td>`; return;}
-      if(key==="Wind direction"){
-        const angles = idx.map(i=>wd[i]);
-        html+=`<td>${formatSummaryDir(angles)}</td>`;
-      }
-      else if(key==="Wind speed & gust"){
-        const wsArr = idx.map(i=>Math.ceil(toKnots(ws[i])));
-        const wgArr = idx.map(i=>Math.ceil(toKnots(wg[i])));
-        html+=`<td>${Math.min(...wsArr)}-${Math.max(...wsArr)} KT / Gust ${Math.max(...wgArr)} KT</td>`;
-      }
-      else if(key==="Weather"){const most=mostFrequent(idx.map(i=>wc[i])); html+=`<td>${weatherMap[most]}</td>`;}
-      else if(key==="Visibility"){const most=mostFrequent(idx.map(i=>wc[i])); html+=`<td>${visibilityFromWeather(weatherMap[most])}</td>`;}
-      else if(key==="Sea state"){const most=mostFrequent(idx.map(i=>seaState(wh[i]))); html+=`<td>${most}</td>`;}
-      else if(key==="Swell height"){const arr=idx.map(i=>wh[i]); html+=`<td>${avg(arr)} (${Math.floor(Math.min(...arr)*10)/10},${Math.ceil(Math.max(...arr)*10)/10})</td>`;}
-      else if(key==="Period"){const arr=idx.map(i=>wp[i]); html+=`<td>${avg(arr)} (${Math.floor(Math.min(...arr))}, ${Math.ceil(Math.max(...arr))})</td>`;}
-      else if(key==="Swell direction"){const angles=idx.map(i=>wdir[i]); html+=`<td>${formatSummaryDir(angles)}</td>`;}
-      else if(key==="Avg Pressure"){const arr=idx.map(i=>pr[i]); html+=`<td>${avg(arr)} (${min(arr)}, ${max(arr)})</td>`;}
-      else if(key==="Temperature"){const arr=idx.map(i=>temp[i]); html+=`<td>${avg(arr)} (${min(arr)}--${max(arr)})</td>`;}
-      else if(key==="Humidity"){const arr=idx.map(i=>rh[i]); html+=`<td>${Math.round(avg(arr))} (${Math.round(Math.min(...arr))}--${Math.round(Math.max(...arr))})</td>`;}
-    });
-    html+=`</tr>`;
-  });
-  html+=`</table></div>`;
-  return html;
-}
+  const wh=wv.hourly.swell_wave_height;
+  const wp=wv.hourly.swell_wave_period;
+  const wdir=wv.hourly.swell_wave_direction;
 
-// --- Build Hourly Table ---
-function buildHourlyTable(name, weatherData, waveData){
-  const wu = weatherData.hourly_units || {};
-  const time = weatherData.hourly.time;
-  const temp = weatherData.hourly.temperature_2m;
-  const ws = weatherData.hourly.wind_speed_10m;
-  const wg = weatherData.hourly.wind_gusts_10m;
-  const wd = weatherData.hourly.wind_direction_10m;
-  const rh = weatherData.hourly.relative_humidity_2m;
-  const pr = weatherData.hourly.surface_pressure;
-  const wc = weatherData.hourly.weathercode;
-  const wh = waveData.hourly.swell_wave_height;
-  const wp = waveData.hourly.swell_wave_period;
-  const wdir = waveData.hourly.swell_wave_direction;
-  const weatherMap = {0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Cloudy",45:"Fog",48:"Rime fog",51:"Light drizzle",53:"Drizzle",55:"Dense drizzle",61:"Slight rain",63:"Rain",65:"Heavy rain",71:"Snow fall",80:"Rain showers",95:"Thunderstorm"};
+  const weatherMap={
+    0:"Clear",1:"Mainly clear",2:"Partly cloudy",3:"Cloudy",
+    45:"Fog",48:"Fog",51:"Drizzle",53:"Drizzle",55:"Drizzle",
+    61:"Rain",63:"Rain",65:"Heavy rain",80:"Showers",95:"Thunderstorm"
+  };
 
-  let html=`<h3>Hourly Table - Point ${name}</h3><table><tr>
-      <th>Time</th><th>Wind dir</th><th>Wind spd & gust</th><th>Weather</th><th>Visibility</th>
-      <th>Sea state</th><th>Swell height</th><th>Period</th><th>Swell dir</th><th>Pressure</th><th>Temp</th><th>Humidity</th>
-      </tr>`;
-  for(let i=0;i<time.length;i++){
+  let html=`<h3>Hourly Table - ${name}</h3>
+  <table>
+  <tr>
+    <th>Time</th><th>Wind</th><th>Speed</th><th>Gust</th>
+    <th>Weather</th><th>Visibility</th><th>Sea</th>
+    <th>Swell H</th><th>Period</th><th>Swell Dir</th>
+    <th>Pressure</th><th>Temp</th><th>Humidity</th>
+  </tr>`;
+
+  for(let i=0;i<t.length;i++){
     html+=`<tr>
-      <td>${time[i]}</td>
-      <td>${degTo16Point(wd[i])} (${Math.round(wd[i])}°)</td>
-      <td>${toKnots(ws[i])} – ${toKnots(wg[i])}</td>
+      <td>${t[i]}</td>
+      <td>${deg16(wd[i])} (${Math.round(wd[i])}°)</td>
+      <td>${knots(ws[i])}</td>
+      <td>${knots(wg[i])}</td>
       <td>${weatherMap[wc[i]]}</td>
-      <td>${visibilityFromWeather(weatherMap[wc[i]])}</td>
-      <td>${seaState(wh[i])}</td>
+      <td>${weatherMap[wc[i]]}</td>
+      <td>-</td>
       <td>${wh[i]}</td>
       <td>${wp[i]}</td>
-      <td>${degTo16Point(wdir[i])} (${Math.round(wdir[i])}°)</td>
+      <td>${deg16(wdir[i])}</td>
       <td>${pr[i]}</td>
       <td>${temp[i]}</td>
       <td>${rh[i]}</td>
     </tr>`;
   }
+
   html+=`</table>`;
   return html;
 }
 
-// --- Load All Points ---
-async function loadAllPoints(){
-  const allData = [];
-  for(const [name, coords] of Object.entries(points)){
-    const data = await fetchData(coords[0], coords[1]);
-    allData.push({name, ...data});
+// ================= RUN =================
+async function run(){
+  const all=[];
+  for(const [n,c] of Object.entries(points)){
+    const d=await fetchData(c[0],c[1]);
+    all.push({n,...d});
   }
 
-  // Derived tables
-  document.getElementById("derivedSummary").innerHTML = allData.map(d=>buildDerivedTable(d.name,d.weatherData,d.waveData)).join('');
+  document.getElementById("derivedSummary").innerHTML=
+    all.map(x=>buildTable(x.n,x.weatherData,x.waveData,"DERIVED")).join("");
 
-  // Summary tables
-  document.getElementById("summary").innerHTML = allData.map(d=>buildSummaryTable(d.name,d.weatherData,d.waveData)).join('');
+  document.getElementById("summary").innerHTML=
+    all.map(x=>buildTable(x.n,x.weatherData,x.waveData,"SUMMARY")).join("");
 
-  // Hourly tables
-  document.getElementById("hourly").innerHTML = allData.map(d=>buildHourlyTable(d.name,d.weatherData,d.waveData)).join('');
+  document.getElementById("hourly").innerHTML=
+    all.map(x=>buildHourlyTable(x.n,x.weatherData,x.waveData)).join("");
 }
 
-loadAllPoints();
+run();
 </script>
+
 </body>
 </html>
