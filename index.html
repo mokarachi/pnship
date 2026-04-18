@@ -1,5 +1,6 @@
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -247,9 +248,10 @@ function buildTable(name,w,wv,type){
       }
 
       else if(k==="Wind speed & gust"){
-       const a=idx.map(i=>Math.round(ws[i]));
-	const g=idx.map(i=>Math.round(wg[i]));
-	html+=`<td>${Math.min(...a)}-${Math.max(...a)} KT / ${Math.max(...g)} KT</td>`;
+       const a = idx.map(i => Math.round(ws[i] / 1.852));
+	const g = idx.map(i => Math.round(wg[i] / 1.852));
+
+	html += `<td>${Math.min(...a)}-${Math.max(...a)} KT / ${Math.max(...g)} KT</td>`;
       }
 
       else if(k==="Weather"){
